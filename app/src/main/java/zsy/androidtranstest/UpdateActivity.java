@@ -15,6 +15,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,6 +26,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -38,6 +40,10 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
+
+import zsy.androidtranstest.domain.Contact;
+import zsy.androidtranstest.service.ContactService;
+import zsy.androidtranstest.utils.MD5;
 
 /**
  * 本地上传和调用系统拍照
@@ -57,6 +63,8 @@ public class UpdateActivity extends Activity implements View.OnClickListener {
 
     private EditText ipAddr;
 
+    File cache; // 缓存文件
+
     //        @AbIocView(id = R.id.photo_full)
     LinearLayout photo_full;
 
@@ -69,11 +77,15 @@ public class UpdateActivity extends Activity implements View.OnClickListener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.update_activity);
+
+        cache = new File(Environment.getExternalStorageDirectory(), "cache"); // 实例化缓存文件
+
         initView();
     }
 
     private void initView() {
         ipAddr = (EditText) this.findViewById(R.id.update_ip);
+        ipAddr.setText("192.168.1.103");
         img = (ImageView) findViewById(R.id.img);
         nati = (Button) findViewById(R.id.natives);
         pai = (Button) findViewById(R.id.pai);
@@ -281,11 +293,30 @@ public class UpdateActivity extends Activity implements View.OnClickListener {
                     while ((ss = input.read()) != -1) {
                         sb1.append((char) ss);
                     }
-                    result = sb1.toString();
+                    final String path = sb1.toString();
+                    result = path;
 //                 // 移除进度框
 //                      removeProgressDialog();
-                    finish();
-                } else {
+//                    Log.v("image result:", path);
+
+                    //异步加载图片
+                    asyncImageLoad(img, path);
+//                    try {
+//                        new Thread(new Runnable() {
+//                            public void run() {
+//                                try {
+//                                    final Uri uri = getImageFromSever(path, cache);
+//                                    img.setImageURI(uri);
+//                                } catch (Exception e) {
+//                                    e.printStackTrace();
+//                                }
+//                            }
+//                        }).start();
+//                    }catch(Exception e){
+//                        e.printStackTrace();
+//                    }
+//                    img.setImageBitmap(null);
+                   // finish();
                 }
             }
         } catch (MalformedURLException e) {
@@ -296,5 +327,77 @@ public class UpdateActivity extends Activity implements View.OnClickListener {
         return result;
     }
 
+    private Uri getImageFromSever(String path, File cacheDir) throws Exception{
+        File localFile = new File(cacheDir, MD5.getMD5(path)+path.substring(path.lastIndexOf(".")));
+        if(localFile.exists()){
+           return Uri.fromFile(localFile);
+        }else{
+            HttpURLConnection conn = (HttpURLConnection) new URL(path).getContent();
+            conn.setConnectTimeout(10000);
+            conn.setRequestMethod("GET");
+            int code = conn.getResponseCode();
+            if(code == 200){
+                FileOutputStream os = new FileOutputStream(localFile);
+                InputStream inputStream = conn.getInputStream();
+                byte[] buffer = new byte[1024];
+                int len = 0;
+                while( (len = inputStream.read(buffer)) != -1){
+                    os.write(buffer, 0, len);
+                }
+                inputStream.close();
+                os.close();
+                return Uri.fromFile(localFile);
+            }
+        }
 
+        return null;
+    }
+
+
+    private void asyncImageLoad(ImageView imageView, String path) {
+        AsyncImageTask asyncImageTask = new AsyncImageTask(imageView);
+        asyncImageTask.execute(path);
+
+    }
+    /**
+     * 使用AsyncTask异步加载图片
+     *
+     * @author Administrator
+     *
+     */
+    private final class AsyncImageTask extends AsyncTask<String, Integer, Uri> {
+        private ImageView imageView;
+
+        public AsyncImageTask(ImageView imageView) {
+            this.imageView = imageView;
+        }
+
+        protected Uri doInBackground(String... params) {// 子线程中执行的
+            try {
+                return ContactService.getImage(params[0], cache);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        protected void onPostExecute(Uri result) {// 运行在主线程
+            if (result != null && imageView != null) {
+                imageView.setImageURI(result);
+                srcPath = result.getPath();
+            }
+        }
+    }
+
+
+
+    @Override
+    protected void onDestroy() {
+        // 删除缓存
+        for (File file : cache.listFiles()) {
+            file.delete();
+        }
+        cache.delete();
+        super.onDestroy();
+    }
 }
