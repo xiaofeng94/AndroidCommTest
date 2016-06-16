@@ -18,12 +18,10 @@ import android.view.WindowManager;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.RadioButton;
 
 import zsy.androidtranstest.fragement.ImageResultFragment;
 import zsy.androidtranstest.fragement.ImageStitchFragement;
-import zsy.androidtranstest.fragement.ImageStitchingFragement;
 import zsy.androidtranstest.fragement.NewOldImageFragment;
 
 public class MainFragementActivity extends AppCompatActivity {
