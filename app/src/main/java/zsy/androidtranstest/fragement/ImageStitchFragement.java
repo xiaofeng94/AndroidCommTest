@@ -11,10 +11,13 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.media.Image;
+import android.media.ThumbnailUtils;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Debug;
 import android.os.Environment;
+import android.provider.MediaStore;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -60,6 +63,7 @@ import java.util.UUID;
 import zsy.androidtranstest.MyApplication;
 import zsy.androidtranstest.R;
 import zsy.androidtranstest.service.ContactService;
+import zsy.androidtranstest.service.ImageUploadService;
 
 /**
  * Created by zsy on 16/6/16.
@@ -173,8 +177,9 @@ public class ImageStitchFragement extends Fragment {
                 Toast.makeText(getActivity(), "submit:" + paths.size(), Toast.LENGTH_SHORT).show();
 //                Log.v("imageViews", mAdapter.imageViews.size();
                 for (int i = 0; i < paths.size();++i){
-                    Log.v("last_path", paths.get(i) + "----------保存路径2");
+//                    Log.v("last_path", paths.get(i) + "----------保存路径2");
                 }
+                submitUploadFile();
             }
         });
 
@@ -215,15 +220,29 @@ public class ImageStitchFragement extends Fragment {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            if (convertView == null) {
+
+            if(convertView == null) {
                 convertView = View.inflate(getActivity(), R.layout.lv_item_stitch, null);
             }
-            ImageView image = (ImageView) convertView.findViewById(R.id.iv_imag_stitch);
-//            if (imageViews.size() < position + 1) {
-//                imageViews.add(image);
-//            }
-            image.setImageURI(Uri.parse(paths.get(position)));
 
+            ImageView image = (ImageView) convertView.findViewById(R.id.iv_imag_stitch);
+
+//            Uri uri = Uri.parse(paths.get(position)); //for setImageUri
+
+//            image.setImageURI(uri);
+
+            Uri uri = Uri.fromFile(new File(paths.get(position)));
+            Bitmap bitmap = null;
+            try {
+                bitmap = MediaStore.Images.Media.getBitmap(getActivity().getContentResolver(), uri);
+//                Log.v("bitmap in", "" + (bitmap.getHeight()));
+            }catch (IOException e){
+                e.printStackTrace();
+            }
+
+            bitmap = ThumbnailUtils.extractThumbnail(bitmap, 100, 100);
+//            Log.v("bitmap out", "" + (bitmap.getHeight()));
+            image.setImageBitmap(bitmap);
             return convertView;
         }
 
@@ -298,7 +317,7 @@ public class ImageStitchFragement extends Fragment {
                     c.moveToFirst();
                     //这是获取的图片保存在sdcard中的位置
                     paths.add(c.getString(c.getColumnIndex("_data")));
-                    Log.v("last_path", paths.get(paths.size() - 1) + "----------保存路径2");
+//                    Log.v("last_path", paths.get(paths.size() - 1) + "----------保存路径2");
                     mAdapter.notifyDataSetChanged();
 
 //                    mAdapter.imageViews.get(mAdapter.imageViews.size()-1).setImageURI(uri);
@@ -347,295 +366,9 @@ public class ImageStitchFragement extends Fragment {
         new Thread(new Runnable() { //开启线程上传文件
             @Override
             public void run() {
-                uploadFiles(updateFileList, RequestURL, params);
+                ImageUploadService.uploadFiles(updateFileList, RequestURL, params);
             }
         }).start();
-    }
-
-    /**
-     * android上传文件到服务器
-     *
-     * @param file       需要上传的文件
-     * @param RequestURL 请求的rul
-     * @return 返回响应的内容
-     */
-    private String uploadFile(File file, String RequestURL, Map<String, String> param) {
-        String result = null;
-        String BOUNDARY = UUID.randomUUID().toString();  //边界标识   随机生成
-        String PREFIX = "--", LINE_END = "\r\n";
-        String CONTENT_TYPE = "multipart/form-data";   //内容类型
-        // 显示进度框
-//      showProgressDialog();
-        try {
-            URL url = new URL(RequestURL);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setReadTimeout(TIME_OUT);
-            conn.setConnectTimeout(TIME_OUT);
-            conn.setDoInput(true);  //允许输入流
-            conn.setDoOutput(true); //允许输出流
-            conn.setUseCaches(false);  //不允许使用缓存
-            conn.setRequestMethod("POST");  //请求方式
-            conn.setRequestProperty("Charset", CHARSET);  //设置编码
-            conn.setRequestProperty("connection", "keep-alive");
-            conn.setRequestProperty("Content-Type", CONTENT_TYPE + ";boundary=" + BOUNDARY);
-            if (file != null) {
-                /**
-                 * 当文件不为空，把文件包装并且上传
-                 */
-                DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
-                StringBuffer sb;
-
-                String params = "";
-                if (param != null && param.size() > 0) {
-                    Iterator<String> it = param.keySet().iterator();
-                    while (it.hasNext()) {
-//                            sb = null;
-                        sb = new StringBuffer();
-                        String key = it.next();
-                        String value = param.get(key);
-                        sb.append(PREFIX).append(BOUNDARY).append(LINE_END);
-                        sb.append("Content-Disposition: form-data; name=\"").append(key).append("\"").append(LINE_END).append(LINE_END);
-                        sb.append(value).append(LINE_END);
-                        params = sb.toString();
-//                        Log.i(TAG, key + "=" + params + "##");
-                        dos.write(params.getBytes());
-//                          dos.flush();
-                    }
-                }
-                sb = new StringBuffer();
-                sb.append(PREFIX);
-                sb.append(BOUNDARY);
-                sb.append(LINE_END);
-                /**
-                 * 这里重点注意：
-                 * name里面的值为服务器端需要key   只有这个key 才可以得到对应的文件
-                 * filename是文件的名字，包含后缀名的   比如:abc.png
-                 */
-                sb.append("Content-Disposition: form-data; name=\"upfile\";filename=\"" + file.getName() + "\"" + LINE_END);
-                sb.append("Content-Type: image/pjpeg; charset=" + CHARSET + LINE_END);
-                sb.append(LINE_END);
-                dos.write(sb.toString().getBytes());
-                InputStream is = new FileInputStream(file);
-                byte[] bytes = new byte[1024];
-                int len = 0;
-                while ((len = is.read(bytes)) != -1) {
-                    dos.write(bytes, 0, len);
-                }
-                is.close();
-                dos.write(LINE_END.getBytes());
-                byte[] end_data = (PREFIX + BOUNDARY + PREFIX + LINE_END).getBytes();
-                dos.write(end_data);
-
-                dos.flush();
-                /**
-                 * 获取响应码  200=成功
-                 * 当响应成功，获取响应的流
-                 */
-
-                int res = conn.getResponseCode();
-                Log.v("conn.getResponseCode()", "res=========" + res);
-                if (res == 200) {
-                    InputStream input = conn.getInputStream();
-                    StringBuffer sb1 = new StringBuffer();
-                    int ss;
-                    while ((ss = input.read()) != -1) {
-                        sb1.append((char) ss);
-                    }
-                    final String path = sb1.toString();
-//                    result = path;
-//                 // 移除进度框
-//                      removeProgressDialog();
-                    Log.v("image result:", path);
-
-                    //异步加载图片
-//                    asyncImageLoad(img, path);
-                }
-            }
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return result;
-    }
-
-    /**
-     * android上传文件到服务器
-     *
-     * @param fileList       需要上传的文件
-     * @param RequestURL 请求的rul
-     * @return 返回响应的内容
-     */
-    private String uploadFiles(List<File> fileList, String RequestURL, Map<String, String> param) {
-        String result = null;
-        String BOUNDARY = UUID.randomUUID().toString();  //边界标识   随机生成
-        String PREFIX = "--", LINE_END = "\r\n";
-        String CONTENT_TYPE = "multipart/form-data";   //内容类型
-        // 显示进度框
-//      showProgressDialog();
-        try {
-            URL url = new URL(RequestURL);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setReadTimeout(TIME_OUT);
-            conn.setConnectTimeout(TIME_OUT);
-            conn.setDoInput(true);  //允许输入流
-            conn.setDoOutput(true); //允许输出流
-            conn.setUseCaches(false);  //不允许使用缓存
-            conn.setRequestMethod("POST");  //请求方式
-            conn.setRequestProperty("Charset", CHARSET);  //设置编码
-            conn.setRequestProperty("connection", "keep-alive");
-            conn.setRequestProperty("Content-Type", CONTENT_TYPE + ";boundary=" + BOUNDARY);
-
-            DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
-
-            StringBuffer sb;
-            String params = "";
-            if (param != null && param.size() > 0) {
-                Iterator<String> it = param.keySet().iterator();
-                while (it.hasNext()) {
-//                            sb = null;
-                    sb = new StringBuffer();
-                    String key = it.next();
-                    String value = param.get(key);
-                    sb.append(PREFIX).append(BOUNDARY).append(LINE_END);
-                    sb.append("Content-Disposition: form-data; name=\"").append(key).append("\"").append(LINE_END).append(LINE_END);
-                    sb.append(value).append(LINE_END);
-                    params = sb.toString();
-//                        Log.i(TAG, key + "=" + params + "##");
-                    dos.write(params.getBytes());
-//                          dos.flush();
-                }
-            }
-            sb = new StringBuffer();
-            sb.append(PREFIX);
-            sb.append(BOUNDARY);
-//            sb.append(LINE_END);
-            dos.write(sb.toString().getBytes());
-
-            for(int i = 0;i < fileList.size();++i){
-                dos.write(LINE_END.getBytes());
-
-                sb = new StringBuffer();
-                /**
-                 * 这里重点注意：
-                 * name里面的值为服务器端需要key   只有这个key 才可以得到对应的文件
-                 * filename是文件的名字，包含后缀名的   比如:abc.png
-                 */
-                sb.append("Content-Disposition: form-data; name=\"upfile\";filename=\"" + fileList.get(i).getName() + "\"" + LINE_END);
-                sb.append("Content-Type: image/pjpeg; charset=" + CHARSET + LINE_END);
-                sb.append(LINE_END);
-                dos.write(sb.toString().getBytes());
-                InputStream is = new FileInputStream(fileList.get(i));
-                byte[] bytes = new byte[1024];
-                int len = 0;
-                while ((len = is.read(bytes)) != -1) {
-                    dos.write(bytes, 0, len);
-                }
-                is.close();
-                dos.write(LINE_END.getBytes());
-                byte[] end_data = (PREFIX + BOUNDARY).getBytes();
-                dos.write(end_data);
-                dos.flush();
-            }
-            dos.write(PREFIX.getBytes());
-            dos.write(LINE_END.getBytes());
-            dos.flush();
-
-            int res = conn.getResponseCode();
-            Log.v("conn.getResponseCode()", "res=========" + res);
-            if (res == 200) {
-                InputStream input = conn.getInputStream();
-                StringBuffer sb1 = new StringBuffer();
-                int ss;
-                while ((ss = input.read()) != -1) {
-                    sb1.append((char) ss);
-                }
-                final String path = sb1.toString();
-//                    result = path;
-//                 // 移除进度框
-//                      removeProgressDialog();
-                Log.v("image result:", path);
-            }
-
-//            if (fileList != null) {
-//                /**
-//                 * 当文件不为空，把文件包装并且上传
-//                 */
-//                DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
-//                StringBuffer sb;
-//
-//                String params = "";
-//                if (param != null && param.size() > 0) {
-//                    Iterator<String> it = param.keySet().iterator();
-//                    while (it.hasNext()) {
-////                            sb = null;
-//                        sb = new StringBuffer();
-//                        String key = it.next();
-//                        String value = param.get(key);
-//                        sb.append(PREFIX).append(BOUNDARY).append(LINE_END);
-//                        sb.append("Content-Disposition: form-data; name=\"").append(key).append("\"").append(LINE_END).append(LINE_END);
-//                        sb.append(value).append(LINE_END);
-//                        params = sb.toString();
-////                        Log.i(TAG, key + "=" + params + "##");
-//                        dos.write(params.getBytes());
-////                          dos.flush();
-//                    }
-//                }
-//                sb = new StringBuffer();
-//                sb.append(PREFIX);
-//                sb.append(BOUNDARY);
-//                sb.append(LINE_END);
-//                /**
-//                 * 这里重点注意：
-//                 * name里面的值为服务器端需要key   只有这个key 才可以得到对应的文件
-//                 * filename是文件的名字，包含后缀名的   比如:abc.png
-//                 */
-//                sb.append("Content-Disposition: form-data; name=\"upfile\";filename=\"" + file.getName() + "\"" + LINE_END);
-//                sb.append("Content-Type: image/pjpeg; charset=" + CHARSET + LINE_END);
-//                sb.append(LINE_END);
-//                dos.write(sb.toString().getBytes());
-//                InputStream is = new FileInputStream(file);
-//                byte[] bytes = new byte[1024];
-//                int len = 0;
-//                while ((len = is.read(bytes)) != -1) {
-//                    dos.write(bytes, 0, len);
-//                }
-//                is.close();
-//                dos.write(LINE_END.getBytes());
-//                byte[] end_data = (PREFIX + BOUNDARY + PREFIX + LINE_END).getBytes();
-//                dos.write(end_data);
-//
-//                dos.flush();
-//                /**
-//                 * 获取响应码  200=成功
-//                 * 当响应成功，获取响应的流
-//                 */
-//
-//                int res = conn.getResponseCode();
-//                Log.v("conn.getResponseCode()", "res=========" + res);
-//                if (res == 200) {
-//                    InputStream input = conn.getInputStream();
-//                    StringBuffer sb1 = new StringBuffer();
-//                    int ss;
-//                    while ((ss = input.read()) != -1) {
-//                        sb1.append((char) ss);
-//                    }
-//                    final String path = sb1.toString();
-////                    result = path;
-////                 // 移除进度框
-////                      removeProgressDialog();
-//                    Log.v("image result:", path);
-//
-//                    //异步加载图片
-////                    asyncImageLoad(img, path);
-//                }
-//            }
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return result;
     }
 }
 
