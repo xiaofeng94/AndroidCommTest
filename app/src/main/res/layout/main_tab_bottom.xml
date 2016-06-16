@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="50dp">
+
+    <RadioGroup
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:text="拼接"
+            android:button="@null"
+            android:id="@+id/image_stitching"
+            android:layout_weight="1"
+            android:gravity="bottom|center_horizontal"
+            android:drawableTop="@drawable/language_select"
+            android:layout_marginTop="5dp" />
+
+        <RadioButton
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:text="合成"
+            android:button="@null"
+            android:id="@+id/new_old_stitching"
+            android:layout_weight="1"
+            android:gravity="bottom|center_horizontal"
+            android:drawableTop="@drawable/intro_select"
+            android:layout_marginTop="5dp" />
+
+        <RadioButton
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:text="设置"
+            android:button="@null"
+            android:id="@+id/setting"
+            android:layout_weight="1"
+            android:gravity="bottom|center_horizontal"
+            android:drawableTop="@drawable/person"
+            android:layout_marginTop="5dp" />
+    </RadioGroup>
+</LinearLayout>
